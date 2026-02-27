@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Control Multi-Usuario</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            text-align: center;
+            padding: 20px;
+            background: #f0f2f5;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            max-width: 800px;
+            margin: 0 auto 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        .value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #1a73e8;
+        }
+
+        .controls {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        input[type="text"] {
+            width: 90%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .status-msg {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 10px;
+            height: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Ranking de Cringe en Tiempo Real</h2>
+    <div id="contenedor-cards" class="dashboard">
+    </div>
+
+    <div class="controls">
+        <label>Tu Nombre:</label>
+        <input type="text" id="input1" placeholder="Ej: Juan">
+
+        <label>Nivel de Cringe: <span id="rangeValue">0</span></label>
+        <input type="range" id="input2" min="0" max="100" value="0">
+
+        <div id="status" class="status-msg">Conectado</div>
+    </div>
+
+    <script>
+        const url = 'https://script.google.com/macros/s/AKfycbxkv_umwSnW8AWk92nHJKgqZtG12bmvtjz_tELMoRkqxMDKxSPnNVJ5gJW5Hdc-gRnR/exec';
+        let timeoutEscritura;
+
+        // OPTIMIZACIÓN: Debounce (espera a que el usuario pare de mover la barra)
+        function peticionOptimizada() {
+            clearTimeout(timeoutEscritura);
+            document.getElementById('status').innerText = "Esperando para guardar...";
+
+            timeoutEscritura = setTimeout(async () => {
+                const nombre = document.getElementById('input1').value;
+                const nivel = document.getElementById('input2').value;
+                if (!nombre) return;
+
+                document.getElementById('status').innerText = "Guardando en la nube...";
+                try {
+                    await fetch(url, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        body: JSON.stringify({ nombre, nivel })
+                    });
+                    document.getElementById('status').innerText = "Sincronizado";
+                } catch (e) {
+                    document.getElementById('status').innerText = "Error de conexión";
+                }
+            }, 500); // 500ms de espera tras el último movimiento
+        }
+
+        // Eventos
+        document.getElementById('input2').addEventListener('input', (e) => {
+            document.getElementById('rangeValue').innerText = e.target.value;
+            peticionOptimizada();
+        });
+
+        document.getElementById('input1').addEventListener('change', peticionOptimizada);
+
+        // LECTURA: Actualiza el dashboard
+        async function leerDatos() {
+            try {
+                const res = await fetch(url);
+                const lista = await res.json();
+                const contenedor = document.getElementById('contenedor-cards');
+
+                contenedor.innerHTML = ''; // Limpiamos
+                lista.forEach(user => {
+                    contenedor.innerHTML += `
+                        <div class="card">
+                            <small>${user.nombre}</small>
+                            <div class="value">${user.nivel}%</div>
+                        </div>
+                    `;
+                });
+            } catch (e) { console.log("Error leyendo datos"); }
+        }
+
+        // Función para avisar al servidor que el usuario se va
+        function borrarAlSalir() {
+            const nombre = document.getElementById('input1').value;
+            if (!nombre) return;
+
+            const datos = JSON.stringify({
+                nombre: nombre,
+                nivel: "DELETE" // Enviamos la señal de borrado
+            });
+
+            // sendBeacon es más fiable para cierres de página que fetch
+            // Convertimos los datos a un Blob para que Google lo acepte correctamente
+            const blob = new Blob([datos], { type: 'application/json' });
+            navigator.sendBeacon(url, blob);
+        }
+
+        // Se ejecuta al cerrar la pestaña o navegar a otra web
+        window.addEventListener('beforeunload', borrarAlSalir);
+
+        // También se recomienda para móviles cuando la app pasa a segundo plano/se cierra
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'hidden') {
+                // Opcional: podrías borrarlo aquí también si quieres 
+                // que desaparezca al minimizar la pestaña
+            }
+        });
+
+        setInterval(leerDatos, 5000);
+        leerDatos();
+    </script>
+</body>
+
+</html>
